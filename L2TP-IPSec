@@ -1,0 +1,169 @@
+### CLARO-ISP ###
+
+ena
+conf t
+no ip domain-lookup
+hostname CLARO-ISP
+
+int gig0/0
+ip add dhcp
+no shut
+exit
+
+int gig0/1
+ip add 20.21.22.2 255.255.255.252
+no shut
+exit
+
+int gig0/2
+ip add 30.31.32.2 255.255.255.252
+no shut
+exit
+
+access-list 1 permit 20.21.22.0 0.0.0.3
+access-list 1 permit 30.31.32.0 0.0.0.3
+
+int ra gig0/1
+ip nat inside
+exit
+
+int ra gig0/2
+ip nat inside
+exit
+
+int gig0/0
+ip nat outside
+exit
+
+ip nat inside source list 1 interface gig0/0 overload
+
+do wr
+
+### R-SITE-A ###
+
+ena
+conf t
+no ip domain-lookup
+hostname R-SITE-A
+
+int gig0/1
+ip add 20.21.22.1 255.255.255.252
+no shut
+exit
+
+int gig0/0
+ip add 192.168.10.1 255.255.255.0
+no shut
+exit
+
+ip route 0.0.0.0 0.0.0.0 20.21.22.2
+
+ip dhcp excluded-address 192.168.10.1 192.168.10.9
+ip dhcp pool SITE-A
+network 192.168.10.0 255.255.255.0
+default-router 192.168.10.1
+dns-server 8.8.8.8
+exit
+
+aaa new-model
+aaa authentication ppp VPN_AUTH local
+aaa authorization network VPN_AUTHOR local
+
+username randy password randy0660
+
+crypto isakmp policy 10
+encryption 3des
+hash sha
+authentication pre-share
+group 2
+lifetime 86400
+
+crypto isakmp key randy123 address 0.0.0.0 0.0.0.0
+
+crypto ipsec transform-set TRANF_SET esp-3des esp-sha-hmac
+mode transport
+exit
+
+crypto dynamic-map L2TP_DMAP 10
+set nat demux
+set transform-set TRANF_SET
+exit
+
+crypto map L2TP_MAP 10 ipsec-isakmp dynamic L2TP_DMAP
+
+int gig0/1
+crypto map L2TP_MAP
+exit
+
+vpdn enable
+vpdn-group L2TP_SERVER
+accept-dialin
+protocol l2tp
+virtual-template 1
+no l2tp tunnel authentication
+exit
+
+interface Virtual-Template1
+ip unnumbered gig0/1
+peer default ip address pool VPN_POOL
+ppp authentication ms-chap-v2 VPN_AUTH
+ppp authorization VPN_AUTHOR
+ip nat inside
+exit
+
+ip local pool VPN_POOL 192.168.99.1 192.168.99.254
+
+access-list 10 permit 192.168.10.0 0.0.0.255
+access-list 10 permit 192.168.99.0 0.0.0.255
+
+int gig0/0
+ip nat inside
+exit
+
+int gig0/1
+ip nat outside
+exit
+
+ip nat inside source list 10 interface gig0/1 overload
+
+do wr
+
+### R-SITE-B ###
+
+ena
+conf t
+no ip domain-lookup
+hostname R-SITE-B
+
+int gig0/2
+ip add 30.31.32.1 255.255.255.252
+no shut
+exit
+
+int gig0/0
+ip add 192.168.20.1 255.255.255.0
+no shut
+exit
+
+ip route 0.0.0.0 0.0.0.0 30.31.32.2
+
+ip dhcp excluded-address 192.168.20.1 192.168.20.9
+ip dhcp pool SITE-B
+network 192.168.20.0 255.255.255.0
+default-router 192.168.20.1
+dns-server 8.8.8.8
+exit
+
+access-list 10 permit 192.168.20.0 0.0.0.255
+
+int gig0/0
+ip nat inside
+exit
+
+int gig0/2
+ip nat outside
+exit
+
+ip nat inside source list 10 interface gig0/2 overload
+
+do wr
